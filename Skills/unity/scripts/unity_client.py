@@ -221,6 +221,11 @@ COMMANDS = {
     'always_refresh': 'set_always_refresh',
     'set_always_refresh': 'set_always_refresh',
     'refresh': 'set_always_refresh',
+    # Scene management
+    'open_scene': 'open_scene',
+    'load_scene': 'open_scene',
+    'list_scenes': 'list_scenes',
+    'scenes': 'list_scenes',
 }
 
 def main():

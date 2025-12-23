@@ -157,6 +157,9 @@ namespace UnityBridgeLite
             RegisterHandler("duplicate_gameobject", DuplicateGameObject);
             RegisterHandler("set_parent", SetParent);
             RegisterHandler("set_always_refresh", SetAlwaysRefresh);
+            // Scene management
+            RegisterHandler("open_scene", OpenScene);
+            RegisterHandler("list_scenes", ListScenes);
         }
 
         // Rotation state
@@ -1487,6 +1490,80 @@ namespace UnityBridgeLite
         private static void ForceSceneRepaint()
         {
             SceneView.RepaintAll();
+        }
+
+        private static object OpenScene(Dictionary<string, object> p)
+        {
+            var scenePath = p.TryGetValue("path", out var pathObj) ? pathObj?.ToString() : null;
+            var sceneName = p.TryGetValue("name", out var nameObj) ? nameObj?.ToString() : null;
+
+            string fullPath = null;
+
+            if (!string.IsNullOrEmpty(scenePath))
+            {
+                fullPath = scenePath;
+            }
+            else if (!string.IsNullOrEmpty(sceneName))
+            {
+                // Search for scene by name
+                var guids = AssetDatabase.FindAssets($"t:Scene {sceneName}");
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (System.IO.Path.GetFileNameWithoutExtension(path).Equals(sceneName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        fullPath = path;
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(fullPath))
+                throw new ArgumentException("Scene not found. Provide 'path' or 'name' parameter.");
+
+            if (!System.IO.File.Exists(fullPath))
+                throw new System.IO.FileNotFoundException($"Scene file not found: {fullPath}");
+
+            // Save current scene if dirty
+            if (UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene().isDirty)
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo();
+            }
+
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene(fullPath);
+
+            return new
+            {
+                opened = true,
+                scenePath = fullPath,
+                sceneName = System.IO.Path.GetFileNameWithoutExtension(fullPath)
+            };
+        }
+
+        private static object ListScenes(Dictionary<string, object> p)
+        {
+            var filter = p.TryGetValue("filter", out var filterObj) ? filterObj?.ToString() : null;
+
+            var guids = AssetDatabase.FindAssets("t:Scene");
+            var scenes = new List<object>();
+
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var name = System.IO.Path.GetFileNameWithoutExtension(path);
+
+                // Apply filter if provided
+                if (!string.IsNullOrEmpty(filter))
+                {
+                    if (!name.Contains(filter, StringComparison.OrdinalIgnoreCase) &&
+                        !path.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                scenes.Add(new { name, path });
+            }
+
+            return new { count = scenes.Count, scenes };
         }
 
         #endregion
