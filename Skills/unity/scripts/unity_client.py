@@ -188,6 +188,14 @@ COMMANDS = {
     'get_build_target': 'get_build_target',
     'set_build_target': 'set_build_target',
     'switch_platform': 'set_build_target',
+    # MultiSet SDK config commands
+    'multiset': 'get_multiset_config',
+    'get_multiset': 'get_multiset_config',
+    'get_multiset_config': 'get_multiset_config',
+    'set_multiset': 'set_multiset_config',
+    'set_multiset_config': 'set_multiset_config',
+    'create_so': 'create_scriptable_object',
+    'create_scriptable_object': 'create_scriptable_object',
 }
 
 def main():

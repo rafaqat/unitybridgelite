@@ -142,6 +142,9 @@ namespace UnityBridgeLite
             RegisterHandler("set_player_settings", SetPlayerSettings);
             RegisterHandler("get_build_target", GetBuildTarget);
             RegisterHandler("set_build_target", SetBuildTarget);
+            RegisterHandler("set_multiset_config", SetMultiSetConfig);
+            RegisterHandler("get_multiset_config", GetMultiSetConfig);
+            RegisterHandler("create_scriptable_object", CreateScriptableObject);
         }
 
         // Rotation state
@@ -888,6 +891,152 @@ namespace UnityBridgeLite
                 success,
                 target = target.ToString(),
                 group = group.ToString()
+            };
+        }
+
+        private static object SetMultiSetConfig(Dictionary<string, object> p)
+        {
+            if (!p.TryGetValue("clientId", out var clientIdObj) || clientIdObj == null)
+            {
+                throw new ArgumentException("Missing 'clientId' parameter");
+            }
+            if (!p.TryGetValue("clientSecret", out var clientSecretObj) || clientSecretObj == null)
+            {
+                throw new ArgumentException("Missing 'clientSecret' parameter");
+            }
+
+            var clientId = clientIdObj.ToString();
+            var clientSecret = clientSecretObj.ToString();
+
+            // Ensure Resources folder exists
+            var resourcesPath = "Assets/Resources";
+            if (!AssetDatabase.IsValidFolder(resourcesPath))
+            {
+                AssetDatabase.CreateFolder("Assets", "Resources");
+            }
+
+            var configPath = "Assets/Resources/MultiSetConfig.asset";
+
+            // Try to find existing config
+            var config = AssetDatabase.LoadAssetAtPath<ScriptableObject>(configPath);
+
+            if (config == null)
+            {
+                // Try to find MultiSetConfig type
+                var configType = AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+                    .FirstOrDefault(t => t.Name == "MultiSetConfig" && typeof(ScriptableObject).IsAssignableFrom(t));
+
+                if (configType == null)
+                {
+                    throw new Exception("MultiSetConfig type not found. Is the MultiSet SDK installed?");
+                }
+
+                config = ScriptableObject.CreateInstance(configType);
+                AssetDatabase.CreateAsset(config, configPath);
+            }
+
+            // Set the fields using reflection
+            var clientIdField = config.GetType().GetField("clientId", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var clientSecretField = config.GetType().GetField("clientSecret", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (clientIdField != null)
+            {
+                clientIdField.SetValue(config, clientId);
+            }
+            if (clientSecretField != null)
+            {
+                clientSecretField.SetValue(config, clientSecret);
+            }
+
+            EditorUtility.SetDirty(config);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            return new
+            {
+                path = configPath,
+                clientIdSet = clientIdField != null,
+                clientSecretSet = clientSecretField != null,
+                message = "MultiSet config updated"
+            };
+        }
+
+        private static object GetMultiSetConfig(Dictionary<string, object> p)
+        {
+            var configPath = "Assets/Resources/MultiSetConfig.asset";
+            var config = AssetDatabase.LoadAssetAtPath<ScriptableObject>(configPath);
+
+            if (config == null)
+            {
+                return new { exists = false, path = configPath };
+            }
+
+            var clientIdField = config.GetType().GetField("clientId", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var clientSecretField = config.GetType().GetField("clientSecret", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            var clientId = clientIdField?.GetValue(config)?.ToString() ?? "";
+            var clientSecret = clientSecretField?.GetValue(config)?.ToString() ?? "";
+
+            return new
+            {
+                exists = true,
+                path = configPath,
+                clientId = !string.IsNullOrEmpty(clientId) ? clientId.Substring(0, Math.Min(8, clientId.Length)) + "..." : "(empty)",
+                clientSecretSet = !string.IsNullOrEmpty(clientSecret)
+            };
+        }
+
+        private static object CreateScriptableObject(Dictionary<string, object> p)
+        {
+            if (!p.TryGetValue("type", out var typeObj) || typeObj == null)
+            {
+                throw new ArgumentException("Missing 'type' parameter");
+            }
+            if (!p.TryGetValue("path", out var pathObj) || pathObj == null)
+            {
+                throw new ArgumentException("Missing 'path' parameter (e.g., 'Assets/Resources/MyConfig.asset')");
+            }
+
+            var typeName = typeObj.ToString();
+            var path = pathObj.ToString();
+
+            // Ensure directory exists
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir) && !AssetDatabase.IsValidFolder(dir))
+            {
+                var parts = dir.Split('/');
+                var current = parts[0];
+                for (int i = 1; i < parts.Length; i++)
+                {
+                    var next = current + "/" + parts[i];
+                    if (!AssetDatabase.IsValidFolder(next))
+                    {
+                        AssetDatabase.CreateFolder(current, parts[i]);
+                    }
+                    current = next;
+                }
+            }
+
+            // Find the type
+            var soType = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+                .FirstOrDefault(t => t.Name == typeName && typeof(ScriptableObject).IsAssignableFrom(t));
+
+            if (soType == null)
+            {
+                throw new Exception($"ScriptableObject type '{typeName}' not found");
+            }
+
+            var instance = ScriptableObject.CreateInstance(soType);
+            AssetDatabase.CreateAsset(instance, path);
+            AssetDatabase.SaveAssets();
+
+            return new
+            {
+                created = true,
+                path,
+                type = soType.FullName
             };
         }
 

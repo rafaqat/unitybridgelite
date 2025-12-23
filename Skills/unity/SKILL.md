@@ -206,6 +206,31 @@ python3 <skill-path>/scripts/unity_client.py switch_platform target=WebGL
 
 ---
 
+### MultiSet SDK Configuration
+
+**Get current MultiSet config:**
+```bash
+python3 <skill-path>/scripts/unity_client.py multiset --pretty
+```
+
+**Set MultiSet credentials:**
+```bash
+# Set client ID and secret (creates Assets/Resources/MultiSetConfig.asset)
+python3 <skill-path>/scripts/unity_client.py set_multiset \
+  clientId=YOUR_CLIENT_ID \
+  clientSecret=YOUR_CLIENT_SECRET
+```
+
+**Create generic ScriptableObject:**
+```bash
+# Create any ScriptableObject asset
+python3 <skill-path>/scripts/unity_client.py create_so \
+  typeName=MultiSetConfig \
+  path=Assets/Resources/MultiSetConfig.asset
+```
+
+---
+
 ## Python API Usage
 
 ```python
@@ -229,6 +254,12 @@ send_command('install_package', {'package': 'com.unity.xr.arkit'})
 
 # Open settings
 send_command('open_settings', {'path': 'Project/XR Plug-in Management'})
+
+# Configure MultiSet SDK
+send_command('set_multiset_config', {
+    'clientId': 'your_client_id',
+    'clientSecret': 'your_client_secret'
+})
 ```
 
 ---
