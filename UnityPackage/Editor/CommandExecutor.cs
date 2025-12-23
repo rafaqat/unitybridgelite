@@ -1354,18 +1354,6 @@ namespace UnityBridgeLite
             return new { count = results.Count, objects = results };
         }
 
-        private static string GetGameObjectPath(GameObject go)
-        {
-            var path = go.name;
-            var parent = go.transform.parent;
-            while (parent != null)
-            {
-                path = parent.name + "/" + path;
-                parent = parent.parent;
-            }
-            return path;
-        }
-
         private static object DuplicateGameObject(Dictionary<string, object> p)
         {
             var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
