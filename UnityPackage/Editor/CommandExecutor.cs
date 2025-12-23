@@ -1450,7 +1450,7 @@ namespace UnityBridgeLite
         private static Dictionary<string, object> ParseSimpleParams(string paramsContent)
         {
             var result = new Dictionary<string, object>();
-            var pairs = System.Text.RegularExpressions.Regex.Matches(paramsContent, @"""([^""]+)""\s*:\s*(""[^""]*""|true|false|\d+)");
+            var pairs = System.Text.RegularExpressions.Regex.Matches(paramsContent, @"""([^""]+)""\s*:\s*(""[^""]*""|true|false|-?\d+\.?\d*)");
 
             foreach (System.Text.RegularExpressions.Match pair in pairs)
             {
@@ -1464,8 +1464,9 @@ namespace UnityBridgeLite
                     value = true;
                 else if (valueStr == "false")
                     value = false;
-                else if (int.TryParse(valueStr, out var intVal))
-                    value = intVal;
+                else if (double.TryParse(valueStr, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var numVal))
+                    value = numVal;
                 else
                     value = valueStr;
 
