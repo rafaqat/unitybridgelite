@@ -156,6 +156,7 @@ namespace UnityBridgeLite
             RegisterHandler("find_gameobject", FindGameObject);
             RegisterHandler("duplicate_gameobject", DuplicateGameObject);
             RegisterHandler("set_parent", SetParent);
+            RegisterHandler("set_always_refresh", SetAlwaysRefresh);
         }
 
         // Rotation state
@@ -1426,6 +1427,59 @@ namespace UnityBridgeLite
                 name,
                 parent = go.transform.parent?.name ?? "(root)"
             };
+        }
+
+        private static object SetAlwaysRefresh(Dictionary<string, object> p)
+        {
+            bool enable = true;
+            if (p.TryGetValue("enable", out var enableObj))
+            {
+                enable = Convert.ToBoolean(enableObj);
+            }
+
+            var sceneView = SceneView.lastActiveSceneView;
+            if (sceneView == null)
+            {
+                // Try to get any scene view
+                var sceneViews = SceneView.sceneViews;
+                if (sceneViews.Count > 0)
+                    sceneView = sceneViews[0] as SceneView;
+            }
+
+            if (sceneView == null)
+                throw new Exception("No Scene View found");
+
+            // In Unity 6, use sceneViewState.alwaysRefresh
+            var stateField = typeof(SceneView).GetProperty("sceneViewState");
+            if (stateField != null)
+            {
+                var state = stateField.GetValue(sceneView);
+                var refreshProp = state?.GetType().GetProperty("alwaysRefresh");
+                if (refreshProp != null)
+                {
+                    refreshProp.SetValue(state, enable);
+                    sceneView.Repaint();
+                    return new { alwaysRefresh = enable, method = "sceneViewState" };
+                }
+            }
+
+            // Fallback: force continuous repaint via EditorApplication
+            if (enable)
+            {
+                EditorApplication.update -= ForceSceneRepaint;
+                EditorApplication.update += ForceSceneRepaint;
+            }
+            else
+            {
+                EditorApplication.update -= ForceSceneRepaint;
+            }
+
+            return new { alwaysRefresh = enable, method = "editorUpdate" };
+        }
+
+        private static void ForceSceneRepaint()
+        {
+            SceneView.RepaintAll();
         }
 
         #endregion

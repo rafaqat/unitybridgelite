@@ -217,6 +217,10 @@ COMMANDS = {
     'duplicate_gameobject': 'duplicate_gameobject',
     'set_parent': 'set_parent',
     'parent': 'set_parent',
+    # Scene view commands
+    'always_refresh': 'set_always_refresh',
+    'set_always_refresh': 'set_always_refresh',
+    'refresh': 'set_always_refresh',
 }
 
 def main():
