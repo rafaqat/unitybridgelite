@@ -196,6 +196,27 @@ COMMANDS = {
     'set_multiset_config': 'set_multiset_config',
     'create_so': 'create_scriptable_object',
     'create_scriptable_object': 'create_scriptable_object',
+    # MultiSet SDK verification commands
+    'verify_multiset': 'verify_multiset_sdk',
+    'verify_multiset_sdk': 'verify_multiset_sdk',
+    'import_samples': 'import_multiset_samples',
+    'import_multiset_samples': 'import_multiset_samples',
+    'check_scene': 'check_multiset_scene',
+    'check_multiset_scene': 'check_multiset_scene',
+    # GameObject manipulation commands
+    'delete': 'delete_gameobject',
+    'delete_gameobject': 'delete_gameobject',
+    'rename': 'rename_gameobject',
+    'rename_gameobject': 'rename_gameobject',
+    'transform': 'set_transform',
+    'set_transform': 'set_transform',
+    'get_transform': 'get_transform',
+    'find': 'find_gameobject',
+    'find_gameobject': 'find_gameobject',
+    'duplicate': 'duplicate_gameobject',
+    'duplicate_gameobject': 'duplicate_gameobject',
+    'set_parent': 'set_parent',
+    'parent': 'set_parent',
 }
 
 def main():

@@ -145,6 +145,17 @@ namespace UnityBridgeLite
             RegisterHandler("set_multiset_config", SetMultiSetConfig);
             RegisterHandler("get_multiset_config", GetMultiSetConfig);
             RegisterHandler("create_scriptable_object", CreateScriptableObject);
+            RegisterHandler("verify_multiset_sdk", VerifyMultiSetSdk);
+            RegisterHandler("import_multiset_samples", ImportMultiSetSamples);
+            RegisterHandler("check_multiset_scene", CheckMultiSetScene);
+            // GameObject manipulation
+            RegisterHandler("delete_gameobject", DeleteGameObject);
+            RegisterHandler("rename_gameobject", RenameGameObject);
+            RegisterHandler("set_transform", SetTransform);
+            RegisterHandler("get_transform", GetTransform);
+            RegisterHandler("find_gameobject", FindGameObject);
+            RegisterHandler("duplicate_gameobject", DuplicateGameObject);
+            RegisterHandler("set_parent", SetParent);
         }
 
         // Rotation state
@@ -732,7 +743,7 @@ namespace UnityBridgeLite
                 settings["targetOSVersionString"] = PlayerSettings.iOS.targetOSVersionString;
                 settings["cameraUsageDescription"] = PlayerSettings.iOS.cameraUsageDescription;
                 settings["locationUsageDescription"] = PlayerSettings.iOS.locationUsageDescription;
-                settings["requiresARKitSupport"] = PlayerSettings.iOS.requiresARKitSupport;
+                // requiresARKitSupport removed in Unity 6 - use XR Plugin Management instead
                 settings["appleEnableAutomaticSigning"] = PlayerSettings.iOS.appleEnableAutomaticSigning;
                 settings["appleDeveloperTeamID"] = PlayerSettings.iOS.appleDeveloperTeamID;
             }
@@ -798,11 +809,7 @@ namespace UnityBridgeLite
                     changes.Add("locationUsageDescription");
                 }
 
-                if (p.TryGetValue("requiresARKitSupport", out var arkitReq))
-                {
-                    PlayerSettings.iOS.requiresARKitSupport = Convert.ToBoolean(arkitReq);
-                    changes.Add("requiresARKitSupport");
-                }
+                // requiresARKitSupport removed in Unity 6 - use XR Plugin Management instead
 
                 if (p.TryGetValue("appleEnableAutomaticSigning", out var autoSign))
                 {
@@ -1037,6 +1044,383 @@ namespace UnityBridgeLite
                 created = true,
                 path,
                 type = soType.FullName
+            };
+        }
+
+        private static object VerifyMultiSetSdk(Dictionary<string, object> p)
+        {
+            var result = new Dictionary<string, object>();
+
+            // Check if MultiSet package is installed
+            var multisetPackage = AssetDatabase.FindAssets("t:asmdef", new[] { "Packages/com.multiset.sdk" });
+            result["packageInstalled"] = multisetPackage.Length > 0;
+
+            // Check for MultiSetConfig
+            var config = Resources.Load("MultiSetConfig");
+            result["configExists"] = config != null;
+
+            if (config != null)
+            {
+                var clientIdField = config.GetType().GetField("clientId", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                var clientSecretField = config.GetType().GetField("clientSecret", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                var clientId = clientIdField?.GetValue(config)?.ToString() ?? "";
+                var clientSecret = clientSecretField?.GetValue(config)?.ToString() ?? "";
+
+                result["hasClientId"] = !string.IsNullOrEmpty(clientId);
+                result["hasClientSecret"] = !string.IsNullOrEmpty(clientSecret);
+                result["configValid"] = !string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret);
+            }
+
+            // Check for MultiSet types
+            var multisetTypes = new[] { "MultisetSdkManager", "MapLocalizationManager", "MultiSetConfig" };
+            var foundTypes = new List<string>();
+
+            foreach (var typeName in multisetTypes)
+            {
+                var type = AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+                    .FirstOrDefault(t => t.Name == typeName);
+                if (type != null)
+                {
+                    foundTypes.Add(typeName);
+                }
+            }
+            result["multisetTypes"] = foundTypes;
+            result["sdkReady"] = foundTypes.Count >= 2 && (bool)(result["configValid"] ?? false);
+
+            return result;
+        }
+
+        private static object ImportMultiSetSamples(Dictionary<string, object> p)
+        {
+            var sampleName = p.TryGetValue("sample", out var s) ? s?.ToString() : null;
+
+            // Find sample scenes in the MultiSet package
+            var packagePath = "Packages/com.multiset.sdk/Samples~/Scenes";
+            var samples = new List<string>();
+
+            try
+            {
+                if (System.IO.Directory.Exists(packagePath))
+                {
+                    var dirs = System.IO.Directory.GetDirectories(packagePath);
+                    foreach (var dir in dirs)
+                    {
+                        var name = System.IO.Path.GetFileName(dir);
+                        if (!name.EndsWith(".meta"))
+                        {
+                            samples.Add(name);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (string.IsNullOrEmpty(sampleName))
+            {
+                return new { availableSamples = samples };
+            }
+
+            // Copy sample to Assets
+            var sourcePath = $"{packagePath}/{sampleName}";
+            var destPath = $"Assets/MultiSetSamples/{sampleName}";
+
+            if (!System.IO.Directory.Exists(sourcePath))
+            {
+                throw new Exception($"Sample '{sampleName}' not found");
+            }
+
+            if (!System.IO.Directory.Exists("Assets/MultiSetSamples"))
+            {
+                AssetDatabase.CreateFolder("Assets", "MultiSetSamples");
+            }
+
+            FileUtil.CopyFileOrDirectory(sourcePath, destPath);
+            AssetDatabase.Refresh();
+
+            return new
+            {
+                imported = true,
+                sample = sampleName,
+                path = destPath
+            };
+        }
+
+        private static object CheckMultiSetScene(Dictionary<string, object> p)
+        {
+            var components = new Dictionary<string, bool>();
+            var componentTypes = new[]
+            {
+                "MultisetSdkManager",
+                "MapLocalizationManager",
+                "SingleFrameLocalizationManager",
+                "OnDeviceLocalizationManager",
+                "MapMeshDownloader",
+                "ModelsetMeshDownloader",
+                "SimulatorModeController"
+            };
+
+            foreach (var typeName in componentTypes)
+            {
+                var type = AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+                    .FirstOrDefault(t => t.Name == typeName && typeof(Component).IsAssignableFrom(t));
+
+                if (type != null)
+                {
+                    var found = UnityEngine.Object.FindFirstObjectByType(type) != null;
+                    components[typeName] = found;
+                }
+                else
+                {
+                    components[typeName] = false;
+                }
+            }
+
+            var hasAnyMultiSet = components.Values.Any(v => v);
+
+            return new
+            {
+                components,
+                hasMultiSetComponents = hasAnyMultiSet,
+                sceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
+            };
+        }
+
+        private static object DeleteGameObject(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Missing 'name' parameter");
+
+            var go = GameObject.Find(name);
+            if (go == null)
+                throw new Exception($"GameObject '{name}' not found");
+
+            Undo.DestroyObjectImmediate(go);
+            return new { deleted = true, name };
+        }
+
+        private static object RenameGameObject(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            var newName = p.TryGetValue("newName", out var nn) ? nn?.ToString() : null;
+
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Missing 'name' parameter");
+            if (string.IsNullOrEmpty(newName))
+                throw new ArgumentException("Missing 'newName' parameter");
+
+            var go = GameObject.Find(name);
+            if (go == null)
+                throw new Exception($"GameObject '{name}' not found");
+
+            Undo.RecordObject(go, "Rename GameObject");
+            go.name = newName;
+            return new { renamed = true, oldName = name, newName };
+        }
+
+        private static object SetTransform(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Missing 'name' parameter");
+
+            var go = GameObject.Find(name);
+            if (go == null)
+                throw new Exception($"GameObject '{name}' not found");
+
+            Undo.RecordObject(go.transform, "Set Transform");
+
+            // Position
+            if (p.TryGetValue("x", out var px)) go.transform.position = new Vector3(Convert.ToSingle(px), go.transform.position.y, go.transform.position.z);
+            if (p.TryGetValue("y", out var py)) go.transform.position = new Vector3(go.transform.position.x, Convert.ToSingle(py), go.transform.position.z);
+            if (p.TryGetValue("z", out var pz)) go.transform.position = new Vector3(go.transform.position.x, go.transform.position.y, Convert.ToSingle(pz));
+
+            if (p.TryGetValue("position", out var posObj) && posObj is Dictionary<string, object> pos)
+            {
+                var x = pos.TryGetValue("x", out var posX) ? Convert.ToSingle(posX) : go.transform.position.x;
+                var y = pos.TryGetValue("y", out var posY) ? Convert.ToSingle(posY) : go.transform.position.y;
+                var z = pos.TryGetValue("z", out var posZ) ? Convert.ToSingle(posZ) : go.transform.position.z;
+                go.transform.position = new Vector3(x, y, z);
+            }
+
+            // Rotation (euler angles)
+            if (p.TryGetValue("rx", out var rx)) go.transform.eulerAngles = new Vector3(Convert.ToSingle(rx), go.transform.eulerAngles.y, go.transform.eulerAngles.z);
+            if (p.TryGetValue("ry", out var ry)) go.transform.eulerAngles = new Vector3(go.transform.eulerAngles.x, Convert.ToSingle(ry), go.transform.eulerAngles.z);
+            if (p.TryGetValue("rz", out var rz)) go.transform.eulerAngles = new Vector3(go.transform.eulerAngles.x, go.transform.eulerAngles.y, Convert.ToSingle(rz));
+
+            if (p.TryGetValue("rotation", out var rotObj) && rotObj is Dictionary<string, object> rot)
+            {
+                var x = rot.TryGetValue("x", out var rotX) ? Convert.ToSingle(rotX) : go.transform.eulerAngles.x;
+                var y = rot.TryGetValue("y", out var rotY) ? Convert.ToSingle(rotY) : go.transform.eulerAngles.y;
+                var z = rot.TryGetValue("z", out var rotZ) ? Convert.ToSingle(rotZ) : go.transform.eulerAngles.z;
+                go.transform.eulerAngles = new Vector3(x, y, z);
+            }
+
+            // Scale
+            if (p.TryGetValue("sx", out var sx)) go.transform.localScale = new Vector3(Convert.ToSingle(sx), go.transform.localScale.y, go.transform.localScale.z);
+            if (p.TryGetValue("sy", out var sy)) go.transform.localScale = new Vector3(go.transform.localScale.x, Convert.ToSingle(sy), go.transform.localScale.z);
+            if (p.TryGetValue("sz", out var sz)) go.transform.localScale = new Vector3(go.transform.localScale.x, go.transform.localScale.y, Convert.ToSingle(sz));
+
+            if (p.TryGetValue("scale", out var scaleObj))
+            {
+                if (scaleObj is Dictionary<string, object> scale)
+                {
+                    var x = scale.TryGetValue("x", out var scaleX) ? Convert.ToSingle(scaleX) : go.transform.localScale.x;
+                    var y = scale.TryGetValue("y", out var scaleY) ? Convert.ToSingle(scaleY) : go.transform.localScale.y;
+                    var z = scale.TryGetValue("z", out var scaleZ) ? Convert.ToSingle(scaleZ) : go.transform.localScale.z;
+                    go.transform.localScale = new Vector3(x, y, z);
+                }
+                else
+                {
+                    var uniformScale = Convert.ToSingle(scaleObj);
+                    go.transform.localScale = new Vector3(uniformScale, uniformScale, uniformScale);
+                }
+            }
+
+            return new
+            {
+                name,
+                position = new { x = go.transform.position.x, y = go.transform.position.y, z = go.transform.position.z },
+                rotation = new { x = go.transform.eulerAngles.x, y = go.transform.eulerAngles.y, z = go.transform.eulerAngles.z },
+                scale = new { x = go.transform.localScale.x, y = go.transform.localScale.y, z = go.transform.localScale.z }
+            };
+        }
+
+        private static object GetTransform(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Missing 'name' parameter");
+
+            var go = GameObject.Find(name);
+            if (go == null)
+                throw new Exception($"GameObject '{name}' not found");
+
+            return new
+            {
+                name = go.name,
+                position = new { x = go.transform.position.x, y = go.transform.position.y, z = go.transform.position.z },
+                localPosition = new { x = go.transform.localPosition.x, y = go.transform.localPosition.y, z = go.transform.localPosition.z },
+                rotation = new { x = go.transform.eulerAngles.x, y = go.transform.eulerAngles.y, z = go.transform.eulerAngles.z },
+                localRotation = new { x = go.transform.localEulerAngles.x, y = go.transform.localEulerAngles.y, z = go.transform.localEulerAngles.z },
+                scale = new { x = go.transform.localScale.x, y = go.transform.localScale.y, z = go.transform.localScale.z },
+                parent = go.transform.parent?.name
+            };
+        }
+
+        private static object FindGameObject(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            var tag = p.TryGetValue("tag", out var t) ? t?.ToString() : null;
+            var contains = p.TryGetValue("contains", out var c) ? c?.ToString() : null;
+
+            var results = new List<object>();
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                var go = GameObject.Find(name);
+                if (go != null)
+                {
+                    results.Add(new { name = go.name, path = GetGameObjectPath(go) });
+                }
+            }
+            else if (!string.IsNullOrEmpty(tag))
+            {
+                var objects = GameObject.FindGameObjectsWithTag(tag);
+                foreach (var go in objects)
+                {
+                    results.Add(new { name = go.name, path = GetGameObjectPath(go) });
+                }
+            }
+            else if (!string.IsNullOrEmpty(contains))
+            {
+                var allObjects = UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+                foreach (var go in allObjects)
+                {
+                    if (go.name.Contains(contains, StringComparison.OrdinalIgnoreCase))
+                    {
+                        results.Add(new { name = go.name, path = GetGameObjectPath(go) });
+                    }
+                }
+            }
+            else
+            {
+                throw new ArgumentException("Provide 'name', 'tag', or 'contains' parameter");
+            }
+
+            return new { count = results.Count, objects = results };
+        }
+
+        private static string GetGameObjectPath(GameObject go)
+        {
+            var path = go.name;
+            var parent = go.transform.parent;
+            while (parent != null)
+            {
+                path = parent.name + "/" + path;
+                parent = parent.parent;
+            }
+            return path;
+        }
+
+        private static object DuplicateGameObject(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Missing 'name' parameter");
+
+            var go = GameObject.Find(name);
+            if (go == null)
+                throw new Exception($"GameObject '{name}' not found");
+
+            var duplicate = UnityEngine.Object.Instantiate(go);
+            duplicate.name = go.name + " (Copy)";
+            Undo.RegisterCreatedObjectUndo(duplicate, "Duplicate GameObject");
+
+            if (p.TryGetValue("newName", out var newName) && newName != null)
+            {
+                duplicate.name = newName.ToString();
+            }
+
+            return new
+            {
+                duplicated = true,
+                originalName = go.name,
+                newName = duplicate.name,
+                instanceId = duplicate.GetInstanceID()
+            };
+        }
+
+        private static object SetParent(Dictionary<string, object> p)
+        {
+            var name = p.TryGetValue("name", out var n) ? n?.ToString() : null;
+            var parentName = p.TryGetValue("parent", out var pn) ? pn?.ToString() : null;
+
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentException("Missing 'name' parameter");
+
+            var go = GameObject.Find(name);
+            if (go == null)
+                throw new Exception($"GameObject '{name}' not found");
+
+            Undo.SetTransformParent(go.transform, null, "Set Parent");
+
+            if (!string.IsNullOrEmpty(parentName))
+            {
+                var parent = GameObject.Find(parentName);
+                if (parent == null)
+                    throw new Exception($"Parent GameObject '{parentName}' not found");
+
+                Undo.SetTransformParent(go.transform, parent.transform, "Set Parent");
+            }
+
+            return new
+            {
+                name,
+                parent = go.transform.parent?.name ?? "(root)"
             };
         }
 
