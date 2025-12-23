@@ -1,0 +1,24 @@
+{
+  "name": "com.rafaqat.unity-bridge-lite",
+  "version": "1.0.0",
+  "displayName": "Unity Bridge Lite",
+  "description": "Lightweight TCP bridge for controlling Unity Editor from external tools. Auto-starts on editor load with fast socket-based communication.",
+  "unity": "2021.3",
+  "author": {
+    "name": "rafaqat",
+    "url": "https://github.com/rafaqat"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rafaqat/unitybridgelite.git"
+  },
+  "keywords": [
+    "bridge",
+    "tcp",
+    "automation",
+    "claude",
+    "ai",
+    "external-tools"
+  ],
+  "license": "MIT"
+}
