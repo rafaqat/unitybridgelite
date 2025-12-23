@@ -364,18 +364,25 @@ namespace UnityBridgeLite
                 color = new Color(r, g, b, a);
             }
 
-            // Create a new material instance - try URP shader first, then fall back to Standard
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-                shader = Shader.Find("Universal Render Pipeline/Simple Lit");
-            if (shader == null)
-                shader = Shader.Find("Standard");
-            if (shader == null)
-                throw new InvalidOperationException("No compatible shader found (tried URP Lit, Simple Lit, and Standard)");
+            // Clone the existing material to preserve shader, then set color
+            Material mat;
+            if (renderer.sharedMaterial != null)
+            {
+                mat = new Material(renderer.sharedMaterial);
+            }
+            else
+            {
+                // No existing material - try to find a compatible shader
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit")
+                    ?? Shader.Find("Universal Render Pipeline/Simple Lit")
+                    ?? Shader.Find("Lit")
+                    ?? Shader.Find("Standard");
+                if (shader == null)
+                    throw new InvalidOperationException("No compatible shader found");
+                mat = new Material(shader);
+            }
 
-            var mat = new Material(shader);
-
-            // Set color - URP uses _BaseColor, Standard uses _Color
+            // Set color on all common color properties
             if (mat.HasProperty("_BaseColor"))
                 mat.SetColor("_BaseColor", color);
             if (mat.HasProperty("_Color"))
