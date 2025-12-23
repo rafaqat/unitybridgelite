@@ -163,6 +163,21 @@ COMMANDS = {
     'set_material_color': 'set_material_color',
     'select': 'select_gameobject',
     'select_gameobject': 'select_gameobject',
+    # Rotation/animation commands
+    'rotate': 'start_rotation',
+    'start_rotation': 'start_rotation',
+    'stop_rotation': 'stop_rotation',
+    'orbit': 'start_orbit',
+    'start_orbit': 'start_orbit',
+    'stop_orbit': 'stop_orbit',
+    # Package management commands
+    'install': 'install_package',
+    'install_package': 'install_package',
+    'packages': 'get_packages',
+    'get_packages': 'get_packages',
+    # Settings commands
+    'settings': 'open_settings',
+    'open_settings': 'open_settings',
 }
 
 def main():

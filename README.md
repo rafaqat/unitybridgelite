@@ -101,6 +101,25 @@ Response:
 | `stop_rotation` | `name` or `all` | Stop rotation |
 | `start_orbit` | `name`, `radius`, `speed`, `center_x/y/z` | Orbit around point |
 | `stop_orbit` | `name` or `all` | Stop orbiting |
+| `install_package` | `package` | Install Unity package (name or git URL) |
+| `get_packages` | - | List installed packages |
+| `open_settings` | `path` | Open Project Settings panel |
+
+### Examples
+
+```python
+# Install ARKit package
+send_command('install_package', {'package': 'com.unity.xr.arkit'})
+
+# Install package from git
+send_command('install_package', {'package': 'https://github.com/user/repo.git'})
+
+# List all packages
+send_command('get_packages')
+
+# Open XR settings
+send_command('open_settings', {'path': 'Project/XR Plug-in Management'})
+```
 
 ## Adding Custom Commands
 

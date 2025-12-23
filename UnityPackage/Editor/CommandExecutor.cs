@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.PackageManager;
+using UnityEditor.PackageManager.Requests;
 using UnityEngine;
 
 namespace UnityBridgeLite
@@ -132,6 +135,9 @@ namespace UnityBridgeLite
             RegisterHandler("stop_rotation", StopRotation);
             RegisterHandler("start_orbit", StartOrbit);
             RegisterHandler("stop_orbit", StopOrbit);
+            RegisterHandler("install_package", InstallPackage);
+            RegisterHandler("get_packages", GetPackages);
+            RegisterHandler("open_settings", OpenSettings);
         }
 
         // Rotation state
@@ -621,6 +627,85 @@ namespace UnityBridgeLite
             }
 
             SceneView.RepaintAll();
+        }
+
+        private static object InstallPackage(Dictionary<string, object> p)
+        {
+            if (!p.TryGetValue("package", out var packageObj) || packageObj == null)
+            {
+                throw new ArgumentException("Missing 'package' parameter (e.g., 'com.unity.xr.arkit' or git URL)");
+            }
+
+            var packageId = packageObj.ToString();
+
+            // Start the add request
+            var request = Client.Add(packageId);
+
+            // Wait for completion (with timeout)
+            var startTime = DateTime.Now;
+            while (!request.IsCompleted)
+            {
+                if ((DateTime.Now - startTime).TotalSeconds > 60)
+                {
+                    return new { status = "timeout", package = packageId, message = "Package installation timed out after 60s" };
+                }
+                System.Threading.Thread.Sleep(100);
+            }
+
+            if (request.Status == StatusCode.Success)
+            {
+                var info = request.Result;
+                return new
+                {
+                    status = "installed",
+                    package = info.packageId,
+                    version = info.version,
+                    displayName = info.displayName
+                };
+            }
+            else
+            {
+                return new { status = "error", package = packageId, error = request.Error?.message ?? "Unknown error" };
+            }
+        }
+
+        private static object GetPackages(Dictionary<string, object> p)
+        {
+            var request = Client.List(true); // include dependencies
+
+            var startTime = DateTime.Now;
+            while (!request.IsCompleted)
+            {
+                if ((DateTime.Now - startTime).TotalSeconds > 30)
+                {
+                    throw new Exception("Package list request timed out");
+                }
+                System.Threading.Thread.Sleep(100);
+            }
+
+            if (request.Status != StatusCode.Success)
+            {
+                throw new Exception(request.Error?.message ?? "Failed to list packages");
+            }
+
+            var packages = request.Result.Select(pkg => new
+            {
+                name = pkg.name,
+                version = pkg.version,
+                displayName = pkg.displayName,
+                source = pkg.source.ToString()
+            }).ToArray();
+
+            return new { count = packages.Length, packages };
+        }
+
+        private static object OpenSettings(Dictionary<string, object> p)
+        {
+            var path = p.TryGetValue("path", out var pathObj) ? pathObj?.ToString() : "Project/XR Plug-in Management";
+
+            SettingsService.OpenProjectSettings(path);
+
+            return new { opened = path };
         }
 
         #endregion
