@@ -739,7 +739,7 @@ namespace UnityBridgeLite
 
             if (platform == "ios")
             {
-                settings["bundleIdentifier"] = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.iOS);
+                settings["bundleIdentifier"] = PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.iOS);
                 settings["targetOSVersionString"] = PlayerSettings.iOS.targetOSVersionString;
                 settings["cameraUsageDescription"] = PlayerSettings.iOS.cameraUsageDescription;
                 settings["locationUsageDescription"] = PlayerSettings.iOS.locationUsageDescription;
@@ -749,7 +749,7 @@ namespace UnityBridgeLite
             }
             else if (platform == "android")
             {
-                settings["bundleIdentifier"] = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android);
+                settings["bundleIdentifier"] = PlayerSettings.GetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android);
                 settings["minSdkVersion"] = PlayerSettings.Android.minSdkVersion.ToString();
                 settings["targetSdkVersion"] = PlayerSettings.Android.targetSdkVersion.ToString();
             }
@@ -783,8 +783,10 @@ namespace UnityBridgeLite
 
             if (p.TryGetValue("bundleIdentifier", out var bundleId) && bundleId != null)
             {
-                var targetGroup = platform == "android" ? BuildTargetGroup.Android : BuildTargetGroup.iOS;
-                PlayerSettings.SetApplicationIdentifier(targetGroup, bundleId.ToString());
+                var namedTarget = platform == "android"
+                    ? UnityEditor.Build.NamedBuildTarget.Android
+                    : UnityEditor.Build.NamedBuildTarget.iOS;
+                PlayerSettings.SetApplicationIdentifier(namedTarget, bundleId.ToString());
                 changes.Add("bundleIdentifier");
             }
 
