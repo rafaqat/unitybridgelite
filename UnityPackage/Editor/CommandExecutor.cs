@@ -138,6 +138,10 @@ namespace UnityBridgeLite
             RegisterHandler("install_package", InstallPackage);
             RegisterHandler("get_packages", GetPackages);
             RegisterHandler("open_settings", OpenSettings);
+            RegisterHandler("get_player_settings", GetPlayerSettings);
+            RegisterHandler("set_player_settings", SetPlayerSettings);
+            RegisterHandler("get_build_target", GetBuildTarget);
+            RegisterHandler("set_build_target", SetBuildTarget);
         }
 
         // Rotation state
@@ -706,6 +710,185 @@ namespace UnityBridgeLite
             SettingsService.OpenProjectSettings(path);
 
             return new { opened = path };
+        }
+
+        private static object GetPlayerSettings(Dictionary<string, object> p)
+        {
+            var platform = p.TryGetValue("platform", out var platObj) ? platObj?.ToString()?.ToLower() : "ios";
+
+            var settings = new Dictionary<string, object>
+            {
+                ["companyName"] = PlayerSettings.companyName,
+                ["productName"] = PlayerSettings.productName,
+                ["bundleVersion"] = PlayerSettings.bundleVersion,
+            };
+
+            if (platform == "ios")
+            {
+                settings["bundleIdentifier"] = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.iOS);
+                settings["targetOSVersionString"] = PlayerSettings.iOS.targetOSVersionString;
+                settings["cameraUsageDescription"] = PlayerSettings.iOS.cameraUsageDescription;
+                settings["locationUsageDescription"] = PlayerSettings.iOS.locationUsageDescription;
+                settings["requiresARKitSupport"] = PlayerSettings.iOS.requiresARKitSupport;
+                settings["appleEnableAutomaticSigning"] = PlayerSettings.iOS.appleEnableAutomaticSigning;
+                settings["appleDeveloperTeamID"] = PlayerSettings.iOS.appleDeveloperTeamID;
+            }
+            else if (platform == "android")
+            {
+                settings["bundleIdentifier"] = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android);
+                settings["minSdkVersion"] = PlayerSettings.Android.minSdkVersion.ToString();
+                settings["targetSdkVersion"] = PlayerSettings.Android.targetSdkVersion.ToString();
+            }
+
+            return settings;
+        }
+
+        private static object SetPlayerSettings(Dictionary<string, object> p)
+        {
+            var platform = p.TryGetValue("platform", out var platObj) ? platObj?.ToString()?.ToLower() : "ios";
+            var changes = new List<string>();
+
+            // Common settings
+            if (p.TryGetValue("companyName", out var company) && company != null)
+            {
+                PlayerSettings.companyName = company.ToString();
+                changes.Add("companyName");
+            }
+
+            if (p.TryGetValue("productName", out var product) && product != null)
+            {
+                PlayerSettings.productName = product.ToString();
+                changes.Add("productName");
+            }
+
+            if (p.TryGetValue("bundleVersion", out var version) && version != null)
+            {
+                PlayerSettings.bundleVersion = version.ToString();
+                changes.Add("bundleVersion");
+            }
+
+            if (p.TryGetValue("bundleIdentifier", out var bundleId) && bundleId != null)
+            {
+                var targetGroup = platform == "android" ? BuildTargetGroup.Android : BuildTargetGroup.iOS;
+                PlayerSettings.SetApplicationIdentifier(targetGroup, bundleId.ToString());
+                changes.Add("bundleIdentifier");
+            }
+
+            // iOS specific
+            if (platform == "ios")
+            {
+                if (p.TryGetValue("targetOSVersion", out var osVer) && osVer != null)
+                {
+                    PlayerSettings.iOS.targetOSVersionString = osVer.ToString();
+                    changes.Add("targetOSVersion");
+                }
+
+                if (p.TryGetValue("cameraUsageDescription", out var camDesc) && camDesc != null)
+                {
+                    PlayerSettings.iOS.cameraUsageDescription = camDesc.ToString();
+                    changes.Add("cameraUsageDescription");
+                }
+
+                if (p.TryGetValue("locationUsageDescription", out var locDesc) && locDesc != null)
+                {
+                    PlayerSettings.iOS.locationUsageDescription = locDesc.ToString();
+                    changes.Add("locationUsageDescription");
+                }
+
+                if (p.TryGetValue("requiresARKitSupport", out var arkitReq))
+                {
+                    PlayerSettings.iOS.requiresARKitSupport = Convert.ToBoolean(arkitReq);
+                    changes.Add("requiresARKitSupport");
+                }
+
+                if (p.TryGetValue("appleEnableAutomaticSigning", out var autoSign))
+                {
+                    PlayerSettings.iOS.appleEnableAutomaticSigning = Convert.ToBoolean(autoSign);
+                    changes.Add("appleEnableAutomaticSigning");
+                }
+
+                if (p.TryGetValue("appleDeveloperTeamID", out var teamId) && teamId != null)
+                {
+                    PlayerSettings.iOS.appleDeveloperTeamID = teamId.ToString();
+                    changes.Add("appleDeveloperTeamID");
+                }
+            }
+
+            // Android specific
+            if (platform == "android")
+            {
+                if (p.TryGetValue("minSdkVersion", out var minSdk) && minSdk != null)
+                {
+                    if (Enum.TryParse<AndroidSdkVersions>(minSdk.ToString(), out var sdkEnum))
+                    {
+                        PlayerSettings.Android.minSdkVersion = sdkEnum;
+                        changes.Add("minSdkVersion");
+                    }
+                }
+            }
+
+            return new { platform, changed = changes.ToArray(), count = changes.Count };
+        }
+
+        private static object GetBuildTarget(Dictionary<string, object> p)
+        {
+            return new
+            {
+                activeBuildTarget = EditorUserBuildSettings.activeBuildTarget.ToString(),
+                selectedBuildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup.ToString(),
+                development = EditorUserBuildSettings.development,
+                buildAppBundle = EditorUserBuildSettings.buildAppBundle
+            };
+        }
+
+        private static object SetBuildTarget(Dictionary<string, object> p)
+        {
+            if (!p.TryGetValue("target", out var targetObj) || targetObj == null)
+            {
+                throw new ArgumentException("Missing 'target' parameter (e.g., 'iOS', 'Android', 'StandaloneOSX')");
+            }
+
+            var targetStr = targetObj.ToString();
+            BuildTarget target;
+            BuildTargetGroup group;
+
+            switch (targetStr.ToLower())
+            {
+                case "ios":
+                    target = BuildTarget.iOS;
+                    group = BuildTargetGroup.iOS;
+                    break;
+                case "android":
+                    target = BuildTarget.Android;
+                    group = BuildTargetGroup.Android;
+                    break;
+                case "standaloneosx":
+                case "macos":
+                case "osx":
+                    target = BuildTarget.StandaloneOSX;
+                    group = BuildTargetGroup.Standalone;
+                    break;
+                case "standalonewindows64":
+                case "windows":
+                    target = BuildTarget.StandaloneWindows64;
+                    group = BuildTargetGroup.Standalone;
+                    break;
+                case "webgl":
+                    target = BuildTarget.WebGL;
+                    group = BuildTargetGroup.WebGL;
+                    break;
+                default:
+                    throw new ArgumentException($"Unknown build target: {targetStr}");
+            }
+
+            var success = EditorUserBuildSettings.SwitchActiveBuildTarget(group, target);
+
+            return new
+            {
+                success,
+                target = target.ToString(),
+                group = group.ToString()
+            };
         }
 
         #endregion

@@ -153,6 +153,59 @@ python3 <skill-path>/scripts/unity_client.py play play=false  # Exit play mode
 
 ---
 
+### Player Settings (iOS/Android)
+
+**Get current player settings:**
+```bash
+python3 <skill-path>/scripts/unity_client.py player platform=ios --pretty
+python3 <skill-path>/scripts/unity_client.py player platform=android --pretty
+```
+
+**Set iOS player settings:**
+```bash
+# Set bundle ID and company
+python3 <skill-path>/scripts/unity_client.py set_player platform=ios bundleIdentifier=com.company.app companyName=MyCompany
+
+# Configure for ARKit
+python3 <skill-path>/scripts/unity_client.py set_player platform=ios \
+  requiresARKitSupport=true \
+  cameraUsageDescription="AR features require camera access"
+
+# Enable automatic signing
+python3 <skill-path>/scripts/unity_client.py set_player platform=ios \
+  appleEnableAutomaticSigning=true \
+  appleDeveloperTeamID=XXXXXXXXXX
+
+# Set target iOS version
+python3 <skill-path>/scripts/unity_client.py set_player platform=ios targetOSVersion=13.0
+```
+
+**Set Android player settings:**
+```bash
+python3 <skill-path>/scripts/unity_client.py set_player platform=android \
+  bundleIdentifier=com.company.app \
+  minSdkVersion=AndroidApiLevel26
+```
+
+---
+
+### Build Target / Platform Switching
+
+**Get current build target:**
+```bash
+python3 <skill-path>/scripts/unity_client.py build_target --pretty
+```
+
+**Switch build platform:**
+```bash
+python3 <skill-path>/scripts/unity_client.py switch_platform target=iOS
+python3 <skill-path>/scripts/unity_client.py switch_platform target=Android
+python3 <skill-path>/scripts/unity_client.py switch_platform target=macOS
+python3 <skill-path>/scripts/unity_client.py switch_platform target=WebGL
+```
+
+---
+
 ## Python API Usage
 
 ```python

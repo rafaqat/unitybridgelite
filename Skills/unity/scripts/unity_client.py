@@ -178,6 +178,16 @@ COMMANDS = {
     # Settings commands
     'settings': 'open_settings',
     'open_settings': 'open_settings',
+    # Player settings commands
+    'player': 'get_player_settings',
+    'get_player_settings': 'get_player_settings',
+    'set_player': 'set_player_settings',
+    'set_player_settings': 'set_player_settings',
+    # Build target commands
+    'build_target': 'get_build_target',
+    'get_build_target': 'get_build_target',
+    'set_build_target': 'set_build_target',
+    'switch_platform': 'set_build_target',
 }
 
 def main():
